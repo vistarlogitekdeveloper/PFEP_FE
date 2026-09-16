@@ -12,7 +12,7 @@ import 'package:flutter/foundation.dart';
 String resolveApiBase() {
   const fromEnv = String.fromEnvironment('PFEP_API');
   if (fromEnv.isNotEmpty) return fromEnv;
-  if (kIsWeb) return 'http://localhost:4000';
+  if (kIsWeb) return 'https://tool-management-cnh.flutter-developer.workers.dev';
   try {
     if (Platform.isAndroid) return 'http://10.0.2.2:4000';
   } catch (_) {

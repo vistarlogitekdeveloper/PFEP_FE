@@ -38,8 +38,8 @@ flutter run --dart-define=PFEP_API=http://192.168.1.20:4000
 flutter build apk --release --dart-define=PFEP_API=https://pfep.example.com
 ```
 
-`lib/core/api.dart` resolves the default: `10.0.2.2:4000` on Android,
-`localhost:4000` everywhere else.
+`lib/core/api.dart` resolves the deployed worker URL on web by default,
+`10.0.2.2:4000` on Android, and `localhost:4000` on other native platforms.
 
 ### Builds
 
