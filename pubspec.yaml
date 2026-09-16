@@ -1,0 +1,51 @@
+name: pfep_frontend
+description: "Vistar PFEP - Plan For Every Part field data collection app."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # state + routing
+  flutter_riverpod: ^3.3.1
+  go_router: ^17.3.0
+
+  # networking
+  dio: ^5.9.2
+
+  # in-app camera capture. maxWidth/imageQuality downscale on the device, so a
+  # phone photo leaves as a few hundred KB rather than several MB (BRD 4.5).
+  image_picker: ^1.2.3
+
+  # offline queue + cached bootstrap live here (BRD 5 - offline mode)
+  shared_preferences: ^2.5.5
+  path_provider: ^2.1.6
+
+  # output: saving the generated Excel / PDF, and the OS print dialog for labels
+  file_saver: ^0.4.0
+  file_picker: ^11.0.2
+  printing: ^5.14.3
+
+  # presentation
+  google_fonts: ^8.1.0
+  fl_chart: ^1.2.0
+  intl: ^0.20.2
+  collection: ^1.19.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # Brand mark, extracted from the approved prototype in design/prototype.html
+    - assets/brand/
