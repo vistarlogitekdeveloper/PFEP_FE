@@ -9,11 +9,11 @@ import 'package:flutter/foundation.dart';
 /// prefix in the CRM, and a client that appends its own `/api` cannot reach it.
 ///
 ///   standalone backend   http://localhost:4000/api
-///   inside the CRM       https://api.vistarlogitek.com/api/v1/pfep
+///   inside the CRM       https://uat-api.vistarlogitek.com//api/v1/pfep
 ///
 /// Override at build time:
 ///   flutter build web --release \
-///     --dart-define=PFEP_API=https://api.vistarlogitek.com/api/v1/pfep
+///     --dart-define=PFEP_API=https://uat-api.vistarlogitek.com//api/v1/pfep
 ///
 /// Android emulators reach the host machine on 10.0.2.2, not localhost, so that
 /// is the default there - it is the single most common first-run stumble.

@@ -32386,7 +32386,7 @@ _.H$=0
 _.J$=a
 _.a9$=_.ad$=0},
 bvr(){var s=A.ce("/+$",!0,!1)
-return A.hw("https://api.vistarlogitek.com/api/v1/pfep",s,"")},
+return A.hw("https://uat-api.vistarlogitek.com//api/v1/pfep",s,"")},
 b57(a,b,c){return new A.d8(a,c,b)},
 bh6(){var s=A.bvr()
 s=new A.yG(s)

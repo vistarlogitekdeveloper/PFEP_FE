@@ -13,8 +13,8 @@ import 'package:pfep_frontend/core/api.dart';
 void main() {
   group('API root is used exactly as configured', () {
     test('a mounted root is not given an extra /api', () {
-      final c = ApiClient(baseUrl: 'https://api.vistarlogitek.com/api/v1/pfep');
-      expect(c.baseUrl, 'https://api.vistarlogitek.com/api/v1/pfep');
+      final c = ApiClient(baseUrl: 'https://uat-api.vistarlogitek.com//api/v1/pfep');
+      expect(c.baseUrl, 'https://uat-api.vistarlogitek.com//api/v1/pfep');
       // The old behaviour appended '/api'; this is what must not come back.
       expect(c.baseUrl.endsWith('/api'), isFalse);
     });
@@ -27,12 +27,12 @@ void main() {
 
   group('fileUrl resolves against the origin, not the API root', () {
     test('a mounted photo path is not prefixed twice', () {
-      final c = ApiClient(baseUrl: 'https://api.vistarlogitek.com/api/v1/pfep');
+      final c = ApiClient(baseUrl: 'https://uat-api.vistarlogitek.com//api/v1/pfep');
       // The server emits this absolute from the site root, mount included.
       const path = '/api/v1/pfep/photos/pho_1/file?exp=123&sig=abc';
       expect(
         c.fileUrl(path),
-        'https://api.vistarlogitek.com/api/v1/pfep/photos/pho_1/file?exp=123&sig=abc',
+        'https://uat-api.vistarlogitek.com//api/v1/pfep/photos/pho_1/file?exp=123&sig=abc',
       );
     });
 
@@ -50,7 +50,7 @@ void main() {
     });
 
     test('an already-absolute URL is passed through', () {
-      final c = ApiClient(baseUrl: 'https://api.vistarlogitek.com/api/v1/pfep');
+      final c = ApiClient(baseUrl: 'https://uat-api.vistarlogitek.com//api/v1/pfep');
       expect(c.fileUrl('https://cdn.example.com/x.jpg'), 'https://cdn.example.com/x.jpg');
     });
   });
