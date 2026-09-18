@@ -23,6 +23,11 @@ dependencies:
   # phone photo leaves as a few hundred KB rather than several MB (BRD 4.5).
   image_picker: ^1.2.3
 
+  # DOM/getUserMedia interop for the live webcam capture on the web build only
+  # (lib/core/webcam_web.dart). Conditionally imported, so the mobile build
+  # never references it.
+  web: ^1.1.0
+
   # offline queue + cached bootstrap live here (BRD 5 - offline mode)
   shared_preferences: ^2.5.5
   path_provider: ^2.1.6

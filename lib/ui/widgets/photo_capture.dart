@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/api.dart';
+import '../../core/webcam.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../models/models.dart';
@@ -16,20 +17,31 @@ import 'common.dart';
 /// names the file from part + vendor + type, so the photo is tagged at the
 /// moment of capture and there is no crop-and-paste step afterwards.
 ///
-/// **`ImageSource.camera` only, deliberately.** The BRD is explicit that every
+/// **Camera-only on a phone, deliberately.** The BRD is explicit that a field
 /// photo is taken inside the app and not picked from the phone's general camera
 /// roll: a picture chosen from the roll was taken at some other time, possibly
 /// at some other part, and re-introduces exactly the matching problem this
-/// module exists to remove. There is no gallery path here on purpose - please
-/// do not add one back as a convenience.
+/// module exists to remove. So on mobile the only source offered is the camera.
 ///
-/// `maxWidth` / `imageQuality` downscale on the device, so a phone photo leaves
-/// as a few hundred KB instead of several MB - which is what makes this usable
-/// on a vendor site with a weak signal.
-Future<Uint8List?> captureImage(BuildContext context) async {
+/// **On the web build the tile also offers "Upload a photo".** A laptop has no
+/// field camera roll to mismatch against, and `ImageSource.camera` on desktop
+/// web cannot open a live camera - it silently degrades to a file dialog - so a
+/// desktop collector was left with a camera button that did not behave like one
+/// and no honest way to attach an image. A file source is the reliable path
+/// there. The anti-mismatch guarantee does not depend on the source anyway: the
+/// server still names the file `<PART>_<VENDOR>_<TYPE>` from the record it was
+/// posted to, so a wrong-part photo is structurally impossible regardless.
+///
+/// `maxWidth` / `imageQuality` downscale on the device (and in the browser via
+/// canvas), so an image leaves as a few hundred KB instead of several MB - which
+/// is what makes this usable on a vendor site with a weak signal.
+Future<Uint8List?> captureImage(
+  BuildContext context, {
+  ImageSource source = ImageSource.camera,
+}) async {
   final picker = ImagePicker();
   final file = await picker.pickImage(
-    source: ImageSource.camera,
+    source: source,
     maxWidth: 1600,
     maxHeight: 1600,
     imageQuality: 78,
@@ -64,22 +76,37 @@ class _PhotoTileState extends ConsumerState<PhotoTile> {
 
   RecordPhoto? get _photo => widget.record.photos[widget.photoType];
 
-  Future<void> _capture() async {
+  /// Native camera (mobile) or a file dialog (web upload), via image_picker.
+  Future<void> _capture({ImageSource source = ImageSource.camera}) async {
     setState(() => _busy = true);
     try {
-      final bytes = await captureImage(context);
-      if (bytes == null) {
-        if (mounted) setState(() => _busy = false);
-        return;
-      }
-      final repo = ref.read(repositoryProvider);
-      final saved = await repo.uploadPhoto(
-        recordId: widget.record.id,
-        photoType: widget.photoType,
-        bytes: bytes,
-        filename: '${widget.photoType}.jpg',
-        label: '${widget.record.partNo} - ${widget.label}',
-      );
+      await _upload(await captureImage(context, source: source));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Live webcam capture, web only (BRD 4.5). Same upload path as everything
+  /// else - the source of the bytes never changes how they are stored.
+  Future<void> _captureWebcam() async {
+    setState(() => _busy = true);
+    try {
+      await _upload(await captureFromWebcam(context, title: widget.label));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _upload(Uint8List? bytes) async {
+    if (bytes == null) return; // cancelled, or the camera gave nothing back
+    try {
+      final saved = await ref.read(repositoryProvider).uploadPhoto(
+            recordId: widget.record.id,
+            photoType: widget.photoType,
+            bytes: bytes,
+            filename: '${widget.photoType}.jpg',
+            label: '${widget.record.partNo} - ${widget.label}',
+          );
       if (!mounted) return;
       if (saved == null) {
         showToast(context, 'Saved on this device',
@@ -91,10 +118,12 @@ class _PhotoTileState extends ConsumerState<PhotoTile> {
       await widget.onChanged();
     } on ApiException catch (e) {
       if (mounted) showToast(context, 'Photo not saved', detail: e.message, error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
+
+  /// The camera action for this build: the live webcam on web, the native
+  /// camera on a phone.
+  void _takePhoto() => (kIsWeb && kWebcamSupported) ? _captureWebcam() : _capture();
 
   Future<void> _delete() async {
     setState(() => _busy = true);
@@ -116,13 +145,15 @@ class _PhotoTileState extends ConsumerState<PhotoTile> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       InkWell(
-        // With the gallery gone there is only one way to fill an empty tile, so
-        // tapping it opens the camera rather than a menu of one. The sheet is
-        // still worth showing once a photo exists - retake and remove are two
-        // different intentions, and removing is destructive.
+        // On a phone an empty tile has one action - the camera - so tapping it
+        // goes straight there rather than showing a menu of one. On the web
+        // build there are two honest choices (camera or upload), so the sheet
+        // is shown. A tile that already has a photo always shows the sheet:
+        // retake, upload and remove are distinct intentions, and remove is
+        // destructive.
         onTap: _busy || !widget.record.isEditable
             ? null
-            : () => _photo == null ? _capture() : _showSheet(),
+            : () => (_photo == null && !kIsWeb) ? _capture() : _showSheet(),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           height: height,
@@ -225,13 +256,29 @@ class _PhotoTileState extends ConsumerState<PhotoTile> {
           const SizedBox(height: 8),
           ListTile(
             leading: Icon(Icons.photo_camera_outlined, color: Brand.pink),
-            title: Text('Retake photo'),
-            subtitle: Text('Opens the camera and tags the image to this part and vendor'),
+            title: Text(_photo == null ? 'Take photo' : 'Retake photo'),
+            subtitle: Text((kIsWeb && kWebcamSupported)
+                ? 'Opens your webcam to take the photo now, tagged to this part and vendor'
+                : 'Opens the camera and tags the image to this part and vendor'),
             onTap: () {
               Navigator.of(ctx).pop();
-              _capture();
+              _takePhoto();
             },
           ),
+          // Web only: a laptop has no field camera roll to mismatch against, and
+          // it is the reliable way to attach an image on a machine whose browser
+          // cannot open a live camera. Not offered on mobile, where camera-only
+          // is the point (see captureImage).
+          if (kIsWeb)
+            ListTile(
+              leading: Icon(Icons.upload_file_outlined, color: Brand.violet),
+              title: Text('Upload a photo'),
+              subtitle: Text('Choose an image file from this computer'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _capture(source: ImageSource.gallery);
+              },
+            ),
           if (_photo != null)
             ListTile(
               leading: Icon(Icons.delete_outline, color: Brand.bad),
