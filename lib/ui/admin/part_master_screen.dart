@@ -233,21 +233,32 @@ class _PartMasterScreenState extends ConsumerState<PartMasterScreen> {
         ),
         const SizedBox(height: 20),
         Panel(
-          title: 'Loaded parts',
-          trailing: SizedBox(
-            width: 220,
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search part or description',
-                prefixIcon: Icon(Icons.search, size: 17),
-                isDense: true,
-              ),
-              style: TextStyle(fontSize: 12.5),
-              onChanged: (v) => setState(() => _search = v.trim()),
-            ),
-          ),
           padding: EdgeInsets.zero,
-          child: parts.when(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            // Custom header so the search field fills the row instead of the
+            // short title stretching across it and pinning a 220px box to the
+            // far edge, which left a large dead band between the two.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(children: [
+                const RibbonAccent(),
+                const SizedBox(width: 9),
+                Text('Loaded parts', style: body(size: 15, weight: FontWeight.w800)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      hintText: 'Search part or description',
+                      prefixIcon: Icon(Icons.search, size: 17),
+                      isDense: true,
+                    ),
+                    style: const TextStyle(fontSize: 12.5),
+                    onChanged: (v) => setState(() => _search = v.trim()),
+                  ),
+                ),
+              ]),
+            ),
+            parts.when(
             loading: () => const Loading(),
             error: (e, _) => ErrorView(error: e),
             data: (list) => list.isEmpty
@@ -294,6 +305,7 @@ class _PartMasterScreenState extends ConsumerState<PartMasterScreen> {
                       ),
                   ]),
           ),
+          ]),
         ),
       ],
     );
