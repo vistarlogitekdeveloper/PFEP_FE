@@ -88,4 +88,32 @@ void main() {
       expect(c.fileUrl('https://cdn.example.com/x.jpg'), 'https://cdn.example.com/x.jpg');
     });
   });
+
+  group('the default root a build falls back to', () {
+    // Regression: mobile defaulted to http://10.0.2.2:4000/api, the emulator's
+    // alias for the development machine's loopback. On a real handset nothing
+    // answers there, so an APK built without --dart-define failed every call
+    // and reported no connection on a phone that was online.
+    test('mobile points at a backend that exists, not the emulator loopback', () {
+      final root = defaultApiRoot(isMobile: true);
+      expect(root, kDeployedApiRoot);
+      expect(root, startsWith('https://'));
+      expect(root, isNot(contains('10.0.2.2')));
+      expect(root, isNot(contains('localhost')));
+      expect(root, isNot(contains('127.0.0.1')));
+    });
+
+    test('the mobile default survives normalisation unchanged', () {
+      // It is handed straight to Dio as a baseUrl, so a stray or doubled slash
+      // in the constant would reach photo URLs and exported workbooks too.
+      expect(normalizeApiRoot(kDeployedApiRoot), kDeployedApiRoot);
+      expect(ApiClient(baseUrl: kDeployedApiRoot).baseUrl, kDeployedApiRoot);
+    });
+
+    test('web and desktop stay local, so _looksUnconfigured can spot them', () {
+      // The deployed web build is always built with --dart-define; the point of
+      // the local default is that a build which was not is recognisable.
+      expect(defaultApiRoot(isMobile: false), 'http://localhost:4000/api');
+    });
+  });
 }

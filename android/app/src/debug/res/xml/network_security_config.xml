@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only. This file lives in src/debug, so it is compiled into the
+  debug APK and no other: the release APK keeps Android's default, which is
+  HTTPS-only, and the deployed backend is HTTPS.
+
+  From targetSdk 28 Android refuses cleartext HTTP unless it is asked not to,
+  and this app targets 36. Without this, every local-development URL in the
+  README - http://10.0.2.2:4000 on the emulator, http://192.168.1.20:4000 from
+  a handset on the office Wi-Fi - is blocked inside the device before the
+  request is ever sent. Dio cannot tell that apart from an unreachable server,
+  so it surfaces as "no connection to the PFEP server" and reads like the
+  backend is down when it is running perfectly well.
+
+  Only a debug build talks to a backend over plain HTTP, so only a debug build
+  is allowed to.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

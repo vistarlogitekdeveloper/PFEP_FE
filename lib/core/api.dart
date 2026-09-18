@@ -9,28 +9,54 @@ import 'package:flutter/foundation.dart';
 /// prefix in the CRM, and a client that appends its own `/api` cannot reach it.
 ///
 ///   standalone backend   http://localhost:4000/api
-///   inside the CRM       https://uat-api.vistarlogitek.com//api/v1/pfep
+///   inside the CRM       https://uat-api.vistarlogitek.com/api/v1/pfep
 ///
 /// Override at build time:
 ///   flutter build web --release \
-///     --dart-define=PFEP_API=https://uat-api.vistarlogitek.com//api/v1/pfep
+///     --dart-define=PFEP_API=https://uat-api.vistarlogitek.com/api/v1/pfep
 ///
-/// Android emulators reach the host machine on 10.0.2.2, not localhost, so that
-/// is the default there - it is the single most common first-run stumble.
+/// A mobile build falls back to the deployed backend; see [defaultApiRoot].
 String resolveApiRoot() {
   const fromEnv = String.fromEnvironment('PFEP_API');
   if (fromEnv.isNotEmpty) return normalizeApiRoot(fromEnv);
+  var isMobile = false;
   try {
-    if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:4000/api';
+    isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
   } catch (_) {
-    // Platform is unavailable on some targets; fall through to localhost.
+    // Platform is unavailable on some targets; treat those as not-mobile.
   }
-  // Deliberately localhost, never the page's own origin. A default that points
-  // at wherever the app happens to be served from turns a missing --dart-define
-  // into a 405 from the static host, which reads like a backend fault rather
-  // than a build that was never told where the backend is.
-  return 'http://localhost:4000/api';
+  return defaultApiRoot(isMobile: isMobile);
 }
+
+/// The deployed backend, used by a mobile build that was handed no API root.
+const kDeployedApiRoot = 'https://uat-api.vistarlogitek.com/api/v1/pfep';
+
+/// Where a build with no `--dart-define=PFEP_API` points.
+///
+/// Split out from [resolveApiRoot], and taking the platform as an argument
+/// rather than reading it, so the mobile branch can be tested on the host VM.
+/// The branch that matters is the one that only ever fires on a handset, which
+/// is exactly the one a `flutter test` run would otherwise never execute.
+///
+/// **Mobile defaults to the deployed backend.** It used to default to
+/// `http://10.0.2.2:4000/api`, which is the *emulator's* alias for the
+/// development machine's own loopback. On a real handset nothing answers
+/// there, so every call failed on a phone that was plainly online and the app
+/// reported no connection to a server it had never been pointed at. An APK is
+/// built once and installed by hand, unlike the web build, which a deploy
+/// script always builds with an explicit `--dart-define` - so the mobile
+/// default has to be an address that answers. Local work overrides it:
+///
+///   flutter run --dart-define=PFEP_API=http://10.0.2.2:4000/api
+///
+/// Web and desktop stay on localhost, deliberately - never the page's own
+/// origin. A default that points at wherever the app happens to be served from
+/// turns a missing `--dart-define` into a 405 from the static host, which reads
+/// like a backend fault rather than a build that was never told where the
+/// backend is. That is what [_looksUnconfigured] exists to call out, and it
+/// only works because the unconfigured value stays recognisably local.
+String defaultApiRoot({required bool isMobile}) =>
+    isMobile ? kDeployedApiRoot : 'http://localhost:4000/api';
 
 /// Tidies a hand-written `--dart-define`: trims trailing slashes and collapses
 /// doubled ones in the path, leaving `https://` alone.

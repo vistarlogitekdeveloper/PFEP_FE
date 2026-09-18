@@ -28,18 +28,30 @@ Sign in with `admin` / `pfep1234` (see the backend README for the other roles).
 ### Pointing at a different API
 
 ```bash
-# Android emulator reaching the host machine — this is the default on Android
-flutter run --dart-define=PFEP_API=http://10.0.2.2:4000
+# Android emulator reaching the host machine
+flutter run --dart-define=PFEP_API=http://10.0.2.2:4000/api
 
 # a real phone on the same Wi-Fi as the laptop running the backend
-flutter run --dart-define=PFEP_API=http://192.168.1.20:4000
+flutter run --dart-define=PFEP_API=http://192.168.1.20:4000/api
 
 # a deployed backend
-flutter build apk --release --dart-define=PFEP_API=https://pfep.example.com
+flutter build apk --release --dart-define=PFEP_API=https://pfep.example.com/api
 ```
 
-`lib/core/api.dart` resolves the deployed worker URL on web by default,
-`10.0.2.2:4000` on Android, and `localhost:4000` on other native platforms.
+The value is the **whole API root**, mount point included — nothing appends
+`/api` for you. Mounted inside the CRM that is `https://host/api/v1/pfep`; a
+standalone backend answers at `https://host/api`.
+
+With no `--dart-define`, `lib/core/api.dart` falls back to the deployed UAT
+backend on Android and iOS, and to `localhost:4000/api` on web and desktop.
+Mobile deliberately does *not* default to `10.0.2.2` — that is the emulator's
+alias for your own machine, and an APK carrying it fails every call on a real
+handset while reporting that the server is unreachable.
+
+Those `http://` URLs only work in a **debug** build. Android has refused
+cleartext HTTP by default since targetSdk 28 and this app targets 36, so
+`android/app/src/debug/` carries a network-security config that permits it.
+A release APK stays HTTPS-only; point it at an `https://` backend.
 
 ### Builds
 
@@ -54,7 +66,7 @@ flutter build web --release      --dart-define=PFEP_API=https://…   # admin pa
 
 ```bash
 flutter analyze   # must be clean
-flutter test      # 27 tests
+flutter test      # 41 tests
 ```
 
 `test/` covers the pure logic — the parts that fail *quietly*:
