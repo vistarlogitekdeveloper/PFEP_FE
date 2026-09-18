@@ -19,7 +19,7 @@ import 'package:flutter/foundation.dart';
 /// is the default there - it is the single most common first-run stumble.
 String resolveApiRoot() {
   const fromEnv = String.fromEnvironment('PFEP_API');
-  if (fromEnv.isNotEmpty) return fromEnv.replaceAll(RegExp(r'/+$'), '');
+  if (fromEnv.isNotEmpty) return normalizeApiRoot(fromEnv);
   try {
     if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:4000/api';
   } catch (_) {
@@ -30,6 +30,22 @@ String resolveApiRoot() {
   // into a 405 from the static host, which reads like a backend fault rather
   // than a build that was never told where the backend is.
   return 'http://localhost:4000/api';
+}
+
+/// Tidies a hand-written `--dart-define`: trims trailing slashes and collapses
+/// doubled ones in the path, leaving `https://` alone.
+///
+/// A build has already shipped with `https://host//api/v1/pfep` in it, from a
+/// find-and-replace that caught the slash. It happened to work - something in
+/// the chain normalised it - but "happens to work" is not a property to rely on
+/// across a proxy change, and the same string reaches image URLs and exported
+/// workbooks. Cheaper to make the typo impossible than to rely on tolerance.
+String normalizeApiRoot(String raw) {
+  final trimmed = raw.trim().replaceAll(RegExp(r'/+$'), '');
+  final m = RegExp(r'^([a-zA-Z][a-zA-Z0-9+.\-]*://[^/]+)(/.*)?$').firstMatch(trimmed);
+  if (m == null) return trimmed;
+  final path = (m.group(2) ?? '').replaceAll(RegExp(r'/{2,}'), '/');
+  return '${m.group(1)}$path';
 }
 
 /// True when a deployed web build was never told where its API is: it is being
@@ -61,7 +77,8 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? resolveApiRoot() {
+  ApiClient({String? baseUrl})
+      : baseUrl = baseUrl == null ? resolveApiRoot() : normalizeApiRoot(baseUrl) {
     _dio = Dio(BaseOptions(
       // `baseUrl` is already the API root - nothing is appended. The backend
       // answers at /api on its own, and at /api/v1/pfep inside the CRM, so the
