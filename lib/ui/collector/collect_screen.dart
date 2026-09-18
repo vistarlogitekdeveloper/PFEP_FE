@@ -380,7 +380,25 @@ class _CollectScreenState extends ConsumerState<CollectScreen> {
     final ready = v?.ok ?? false;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      if (!ready)
+      // A complete record that has already moved on - approved, or sitting with
+      // a reviewer - is still "complete", so the plain ready/not-ready split
+      // told an Admin-signed-off record to "Submit it for review" beside a dead
+      // button. The terminal states are called out for what they are instead.
+      if (rec.status == 'Approved')
+        _Callout(
+          tone: Brand.ok,
+          icon: Icons.verified,
+          title: 'Approved',
+          body: 'A reviewer has approved this record. It is locked - there is nothing to add or resubmit.',
+        )
+      else if (rec.status == 'Submitted')
+        _Callout(
+          tone: Brand.info,
+          icon: Icons.hourglass_top,
+          title: 'Awaiting review',
+          body: 'Submitted and waiting for a reviewer. It comes back here if anything needs changing.',
+        )
+      else if (!ready)
         _Callout(
           tone: Brand.warn,
           icon: Icons.rule,
@@ -448,11 +466,21 @@ class _CollectScreenState extends ConsumerState<CollectScreen> {
         const SizedBox(width: 10),
         Expanded(
           child: RibbonButton(
-            label: ready ? 'Submit for review' : 'Submit (incomplete)',
+            // The label names the actual state, so a locked or already-sent
+            // record does not sit behind a button that says "Submit".
+            label: rec.status == 'Approved'
+                ? 'Approved - locked'
+                : rec.status == 'Submitted'
+                    ? 'Awaiting review'
+                    : ready
+                        ? 'Submit for review'
+                        : 'Submit (incomplete)',
             icon: Icons.send_rounded,
             busy: _saving,
             expand: true,
-            onPressed: rec.isEditable ? _submit : null,
+            // Editable and not already sent. An incomplete one stays pressable
+            // on purpose - the server answers with exactly what is missing.
+            onPressed: rec.isEditable && rec.status != 'Submitted' ? _submit : null,
           ),
         ),
       ]),
