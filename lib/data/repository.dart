@@ -101,6 +101,11 @@ class PfepRepository {
   Future<void> addPart(String customerId, Map<String, dynamic> body) =>
       api.post('/customers/$customerId/parts', body: body);
 
+  /// Deletes a part and, by cascade, its vendor mappings and PFEP records.
+  /// Admin only server-side; returns { partNo, recordsRemoved }.
+  Future<Map<String, dynamic>> deletePart(String customerId, String partId) async =>
+      Map<String, dynamic>.from(await api.delete('/customers/$customerId/parts/$partId'));
+
   /* ----------------------------------------------------------- field config */
 
   Future<FieldConfig> fieldConfig(String customerId) async =>

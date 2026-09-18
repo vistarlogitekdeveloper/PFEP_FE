@@ -8,6 +8,7 @@ import '../../core/downloads.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../models/models.dart';
+import 'add_part_dialog.dart';
 import '../widgets/common.dart';
 
 /// BRD 4.1 - Part Master upload.
@@ -108,9 +109,89 @@ class _PartMasterScreenState extends ConsumerState<PartMasterScreen> {
     }
   }
 
+  /// Create one part by hand, without preparing a spreadsheet (BRD 4.1). Maps
+  /// it to one or more vendors; each pairing becomes its own PFEP record, the
+  /// same grain the bulk upload produces.
+  Future<void> _addPart() async {
+    final cid = ref.read(activeCustomerIdProvider);
+    if (cid == null) return;
+    final body = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const AddPartDialog(),
+    );
+    if (body == null) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(repositoryProvider).addPart(cid, body);
+      if (!mounted) return;
+      // A new part opens new records, so the same things the bulk commit
+      // refreshes have to refresh here too.
+      ref.invalidate(partSearchProvider);
+      ref.invalidate(recordsProvider);
+      ref.invalidate(dashboardProvider);
+      ref.read(sessionProvider.notifier).refreshCustomers();
+      final n = (body['vendorIds'] as List).length;
+      showToast(context, 'Part added',
+          detail: '${body['partNo']} mapped to $n vendor(s) - $n record(s) opened for collection.');
+    } on ApiException catch (e) {
+      if (mounted) showToast(context, 'Could not add the part', detail: e.message, error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Delete a part and, by cascade, its records and photos. Admin only, and
+  /// guarded by a confirm because it discards collection work, not just a name.
+  Future<void> _deletePart(Part p) async {
+    final cid = ref.read(activeCustomerIdProvider);
+    if (cid == null) return;
+    final recordCount = p.vendors.length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete this part?'),
+        content: Text(
+          '${p.partNo} - ${p.description}\n\n'
+          'This removes the part and its $recordCount record(s), including any field data and '
+          'photos already collected against them. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Brand.bad),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final res = await ref.read(repositoryProvider).deletePart(cid, p.id);
+      if (!mounted) return;
+      ref.invalidate(partSearchProvider);
+      ref.invalidate(recordsProvider);
+      ref.invalidate(dashboardProvider);
+      ref.read(sessionProvider.notifier).refreshCustomers();
+      showToast(context, 'Part deleted',
+          detail: '${res['partNo'] ?? p.partNo} and ${res['recordsRemoved'] ?? recordCount} record(s) removed.');
+    } on ApiException catch (e) {
+      if (mounted) showToast(context, 'Could not delete the part', detail: e.message, error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final parts = ref.watch(partSearchProvider(_search));
+    // Delete is destructive and Admin-only. Part Master is already an
+    // Admin-only route, but the button is gated on the role too so "view as"
+    // previews of other roles never show it.
+    final isAdmin = ref.watch(sessionProvider).user?.isAdmin ?? false;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
@@ -129,10 +210,16 @@ class _PartMasterScreenState extends ConsumerState<PartMasterScreen> {
               icon: Icon(Icons.download_outlined, size: 16),
               label: Text('Download template'),
             ),
-            FilledButton.icon(
+            OutlinedButton.icon(
               onPressed: _busy ? null : _pickFile,
               icon: Icon(Icons.upload_file, size: 17),
               label: Text('Choose file'),
+            ),
+            // The single-entry path: add one part without a spreadsheet.
+            FilledButton.icon(
+              onPressed: _busy ? null : _addPart,
+              icon: Icon(Icons.add, size: 18),
+              label: Text('Add a part'),
             ),
           ],
         ),
@@ -197,6 +284,12 @@ class _PartMasterScreenState extends ConsumerState<PartMasterScreen> {
                                 textAlign: TextAlign.right,
                                 style: TextStyle(color: Brand.txt3, fontSize: 11)),
                           ),
+                          if (isAdmin)
+                            IconButton(
+                              icon: Icon(Icons.delete_outline, size: 18, color: Brand.txt3),
+                              tooltip: 'Delete part',
+                              onPressed: _busy ? null : () => _deletePart(p),
+                            ),
                         ]),
                       ),
                   ]),
