@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api.dart';
 import '../core/offline_queue.dart';
+import '../core/telemetry.dart';
 import '../models/models.dart';
 import 'repository.dart';
 
@@ -141,6 +142,9 @@ class SessionNotifier extends Notifier<SessionState> {
     _api.setToken(token);
     try {
       final me = await _repo.me();
+      // Usage analytics, before the state change so the screen it leads to is
+      // already theirs. Fire and forget.
+      _identify(me.user);
       state = SessionState(
         user: me.user,
         customers: me.customers,
@@ -150,6 +154,8 @@ class SessionNotifier extends Notifier<SessionState> {
     } catch (e) {
       // An expired token or an unreachable server must not trap the user on a
       // spinner; drop the token and show the sign-in screen.
+      // The analytics identity of that session goes too (not awaited).
+      Telemetry.signedOut();
       _api.setToken(null);
       await prefs.remove(_tokenKey);
       state = state.copyWith(loading: false, clearUser: true);
@@ -170,6 +176,8 @@ class SessionNotifier extends Notifier<SessionState> {
           ? saved
           : (me.customers.isEmpty ? null : me.customers.first.id);
 
+      // Before the state change, so the screen it leads to is already theirs.
+      _identify(me.user);
       state = SessionState(user: me.user, customers: me.customers, activeCustomerId: active, loading: false);
     } on ApiException catch (e) {
       state = state.copyWith(loading: false, error: e.message);
@@ -178,7 +186,13 @@ class SessionNotifier extends Notifier<SessionState> {
     }
   }
 
+  /// Usage analytics: who this is (the opaque user id and the role only,
+  /// never the username or name). Fire and forget.
+  void _identify(AppUser user) => Telemetry.signedIn(userId: user.id, role: user.role);
+
   Future<void> signOut() async {
+    // Not awaited: sign-out never waits for analytics.
+    Telemetry.signedOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     _api.setToken(null);

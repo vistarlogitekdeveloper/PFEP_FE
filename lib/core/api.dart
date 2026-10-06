@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'telemetry.dart';
+
 /// The **full API root**, including whatever path the backend is mounted under.
 ///
 /// This is the whole value, not a host: the backend has been mounted under a
@@ -122,6 +124,10 @@ class ApiClient {
         handler.next(options);
       },
     ));
+
+    // Usage analytics: named actions and failed calls. Changes nothing about
+    // the request or its handling (core/telemetry.dart).
+    _dio.interceptors.add(TelemetryInterceptor());
   }
 
   final String baseUrl;
