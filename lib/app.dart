@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/telemetry.dart';
 import 'core/theme.dart';
 import 'data/providers.dart';
 import 'ui/admin/audit_screen.dart';
@@ -53,7 +54,7 @@ class _PfepAppState extends ConsumerState<PfepApp> {
       }
     });
 
-    _router = GoRouter(
+    _router = _withScreenViews(GoRouter(
       initialLocation: '/dashboard',
       refreshListenable: _authChanged,
       redirect: (context, state) {
@@ -110,7 +111,7 @@ class _PfepAppState extends ConsumerState<PfepApp> {
           ],
         ),
       ],
-    );
+    ));
   }
 
   @override
@@ -135,6 +136,26 @@ class _PfepAppState extends ConsumerState<PfepApp> {
       ),
     );
   }
+}
+
+/// Reports each screen the router shows to usage analytics (by route
+/// pattern; see Telemetry.screen). The router lives as long as the app.
+GoRouter _withScreenViews(GoRouter router) {
+  if (!Telemetry.enabled) return router;
+  // The delegate, not the route-information provider: it also hears the
+  // location changes a redirect makes (sign-in landing on the role's home).
+  void report() {
+    try {
+      Telemetry.screen(router.routerDelegate.currentConfiguration.uri.toString());
+    } catch (_) {
+      // No configuration yet; the next change reports.
+    }
+  }
+
+  router.routerDelegate.addListener(report);
+  // The listener only hears changes: report the starting screen too.
+  WidgetsBinding.instance.addPostFrameCallback((_) => report());
+  return router;
 }
 
 /// Bridges the Riverpod session into GoRouter's refresh mechanism.

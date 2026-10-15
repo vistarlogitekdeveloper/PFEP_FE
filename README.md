@@ -248,3 +248,50 @@ keys, so it can be added without touching the form, the export or the API.
 The simpler reference-card approach in BRD 4.6 — photographing an A4 sheet or an
 ID card next to the item and scaling from the known size — would slot in at the
 same place.
+
+## Usage analytics (event tracker)
+
+`lib/core/telemetry.dart`, using the in-house `vistar_event_tracker` SDK
+(vendored in `packages/`, see its `VENDORED.md`). Read in the Platform Console
+under Analytics > Event tracker.
+
+**Off unless the build gets both `ET_APP_ID` and `ET_WRITE_KEY`**; without them
+nothing is initialised, the telemetry code is tree-shaken out of the web build
+and the app behaves exactly as before. To switch it on, register the app as
+`pfep_app` in the Platform Console, Settings > Event tracker, take its write key
+(it only lets a client append events, so it may ship in the app), and add two
+defines to the build (paste the key with no leading space or newline):
+
+- **Web.** The Cloudflare Workers project `pfep-fe` serves `dist/`
+  (`wrangler.toml`: `[assets] directory = "./dist"`), and `dist/` is the
+  committed output of a local `flutter build web`. So build it with the defines
+  and commit `dist/` as usual:
+
+  ```bash
+  flutter build web --release --dart-define=PFEP_API=https://uat-api.vistarlogitek.com/api/v1/pfep \
+    --dart-define=ET_APP_ID=pfep_app --dart-define=ET_WRITE_KEY=wk_... --output dist
+  ```
+
+  If the Cloudflare dashboard's build command runs `flutter build web` itself,
+  instead set the build variables `ET_APP_ID` and `ET_WRITE_KEY` (Settings >
+  Build > Variables and secrets) and append
+  ` --dart-define=ET_APP_ID=$ET_APP_ID --dart-define=ET_WRITE_KEY=$ET_WRITE_KEY`
+  to that command.
+- **APK / app bundle / iOS:** add the same two defines to `flutter build apk`,
+  `appbundle` or `ipa`.
+
+Events go to the host of `PFEP_API` (a UAT build reports to UAT);
+`ET_BASE_URL` overrides it.
+
+Sent: screen views by route (`/records/:id`; customer codes, part numbers,
+vendor codes and config keys in a path become `:ref`); sign-in / sign-out, the
+user as `pfep:<user id>` (the opaque `usr_...` key) with their role as the only
+trait; named actions from successful writes (`record_saved`,
+`record_submitted`, `photo_uploaded`, `offline_queue_synced`,
+`record_approved`, `part_master_imported`, ... see `_actions`); failed API
+calls (5xx / no connection, except the 20-second `/sync/ping` probe) and client
+errors by type. Never sent: request or response bodies, usernames, names,
+employee codes, phone numbers, emails, part numbers, supplier names, customer
+codes, quantities, dimensions, photos or notes. Nothing is awaited by a screen,
+a save, a sign-in or a sign-out; start-up waits at most 2 s; the event queue is
+capped at 200.
