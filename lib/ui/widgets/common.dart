@@ -28,6 +28,13 @@ String fmtNum(dynamic v) {
 String fmtAgo(int? ms) {
   if (ms == null) return 'never';
   final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms));
+  // A timestamp in the future is bad data, not "now". Left unguarded, any
+  // future value produced a negative difference that fell into the < 1 minute
+  // branch and read as "just now" forever - which is how a wrong seed date made
+  // every review-queue row say "just now". Show the actual date instead, so the
+  // value is visible rather than masked. A few seconds of clock skew still
+  // reads as "just now".
+  if (d.isNegative) return d.inSeconds > -90 ? 'just now' : fmtDate(ms);
   if (d.inMinutes < 1) return 'just now';
   if (d.inMinutes < 60) return '${d.inMinutes} min ago';
   if (d.inHours < 24) return '${d.inHours} hr ago';

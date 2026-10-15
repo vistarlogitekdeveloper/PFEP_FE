@@ -92,7 +92,11 @@ class ReviewQueueScreen extends ConsumerWidget {
                               Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                                 Pill(r.vendorName, color: Brand.txt3, icon: Icons.local_shipping_outlined),
                                 Pill(r.collectedByName ?? 'unknown', color: Brand.violet, icon: Icons.person_outline),
-                                Pill(fmtAgo(r.collectedAt), color: Brand.txt3, icon: Icons.schedule),
+                                // When it was submitted, not when it was first
+                                // collected - this queue is about sign-off. For
+                                // a Submitted record updatedAt is the submit time.
+                                Pill('submitted ${fmtAgo(r.updatedAt ?? r.collectedAt)}',
+                                    color: Brand.txt3, icon: Icons.schedule),
                                 if (r.data['bin'] != null)
                                   Pill('Bin ${r.data['bin']}', color: Brand.info),
                                 if (r.missingPhotos.isNotEmpty)

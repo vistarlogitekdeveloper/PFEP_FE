@@ -467,6 +467,7 @@ class PfepRecord {
     this.collectedAt,
     this.reviewedByName,
     this.reviewedAt,
+    this.updatedAt,
     this.reviewNote,
     this.device,
     this.version = 1,
@@ -501,6 +502,11 @@ class PfepRecord {
   final int? collectedAt;
   final String? reviewedByName;
   final int? reviewedAt;
+
+  /// Last change to the record. For a record sitting in the review queue
+  /// (status Submitted, nothing done after), this is the submission time - the
+  /// closest thing to a submitted_at the schema keeps.
+  final int? updatedAt;
   final String? reviewNote;
   final String? device;
   final int version;
@@ -545,6 +551,7 @@ class PfepRecord {
       collectedAt: _int(j['collectedAt']),
       reviewedByName: j['reviewedByName'] as String?,
       reviewedAt: _int(j['reviewedAt']),
+      updatedAt: _int(j['updatedAt']),
       reviewNote: j['reviewNote'] as String?,
       device: j['device'] as String?,
       version: _int(j['version']) ?? 1,
