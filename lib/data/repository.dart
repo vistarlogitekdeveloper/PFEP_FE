@@ -35,6 +35,15 @@ class PfepRepository {
     );
   }
 
+  /// Self-service password change. The backend verifies the current password and
+  /// applies the length policy; a wrong current password comes back as a 403 and
+  /// a too-short new one as a 400, both surfaced to the dialog as [ApiException].
+  Future<void> changePassword(String currentPassword, String newPassword) =>
+      api.post('/auth/change-password', body: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
+
   /* ------------------------------------------------------------- customers */
 
   Future<List<Customer>> customers() async {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,8 +25,10 @@ const _accounts = [
 ];
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _user = TextEditingController(text: 'admin');
-  final _pass = TextEditingController(text: 'pfep1234');
+  // Prefilled only in a debug build. The deployed (release) build opens blank so
+  // it never carries the demo credentials on screen (#22E).
+  final _user = TextEditingController(text: kDebugMode ? 'admin' : '');
+  final _pass = TextEditingController(text: kDebugMode ? 'pfep1234' : '');
   String _picked = 'admin';
   bool _obscure = true;
 
@@ -112,30 +115,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 onSubmitted: (_) => _submit(),
               ),
-              const SizedBox(height: 15),
-
-              Text('SIGN IN AS', style: fieldLabel()),
-              const SizedBox(height: 9),
-              // .role-grid
-              GridView(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  mainAxisExtent: 66,
+              // A dev-only shortcut to the seeded accounts; never shown on the
+              // deployed build, so the login screen does not advertise the demo
+              // accounts (#22E).
+              if (kDebugMode) ...[
+                const SizedBox(height: 15),
+                Text('SIGN IN AS', style: fieldLabel()),
+                const SizedBox(height: 9),
+                // .role-grid
+                GridView(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    mainAxisExtent: 66,
+                  ),
+                  children: [
+                    for (final (username, role, blurb) in _accounts)
+                      _RoleChip(
+                        role: role,
+                        blurb: blurb,
+                        selected: _picked == username,
+                        onTap: () => _pick(username),
+                      ),
+                  ],
                 ),
-                children: [
-                  for (final (username, role, blurb) in _accounts)
-                    _RoleChip(
-                      role: role,
-                      blurb: blurb,
-                      selected: _picked == username,
-                      onTap: () => _pick(username),
-                    ),
-                ],
-              ),
+              ],
 
               if (session.error != null) ...[
                 const SizedBox(height: 16),
@@ -152,8 +159,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 22),
               Text(
-                'Demo build · every account uses the password pfep1234\n'
-                'API: ${ref.watch(apiClientProvider).baseUrl}',
+                // The password hint only in a debug build; the deployed build
+                // shows a neutral footer and never names the demo password (#22E).
+                kDebugMode
+                    ? 'Demo build · every account uses the password pfep1234\n'
+                        'API: ${ref.watch(apiClientProvider).baseUrl}'
+                    : 'Vistar Logitek · PFEP',
                 textAlign: TextAlign.center,
                 style: body(size: 11.5, color: Brand.txt3, height: 1.6),
               ),

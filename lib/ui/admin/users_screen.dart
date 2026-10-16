@@ -5,6 +5,7 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../models/models.dart';
+import '../change_password_dialog.dart' show kPasswordMinLength;
 import '../widgets/common.dart';
 
 /// BRD 4.11 - user roles and access.
@@ -162,6 +163,7 @@ class _UserDialogState extends State<_UserDialog> {
   late String _role = widget.existing?.role ?? 'Collector';
   late bool _active = widget.existing?.active ?? true;
   late final Set<String> _scope = {...(widget.existing?.customers ?? const [])};
+  String? _pwError;
 
   @override
   void dispose() {
@@ -169,6 +171,28 @@ class _UserDialogState extends State<_UserDialog> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  void _submit() {
+    final pw = _password.text;
+    // Required when creating, optional when editing; whenever it is present it
+    // must clear the same floor the backend enforces (config.passwordMinLength),
+    // so the admin path no longer accepts a password a collector could not set.
+    if ((widget.existing == null || pw.isNotEmpty) && pw.length < kPasswordMinLength) {
+      setState(() => _pwError = 'At least $kPasswordMinLength characters');
+      return;
+    }
+    Navigator.of(context).pop({
+      if (widget.existing == null) 'username': _username.text.trim(),
+      'name': _name.text.trim(),
+      'role': _role,
+      'empCode': _emp.text.trim(),
+      'phone': _phone.text.trim(),
+      'device': _device.text.trim(),
+      'active': _active,
+      if (pw.isNotEmpty) 'password': pw,
+      'customers': _role == 'Collector' ? _scope.toList() : <String>[],
+    });
   }
 
   @override
@@ -217,6 +241,8 @@ class _UserDialogState extends State<_UserDialog> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: widget.existing == null ? 'Password' : 'New password (optional)',
+                  helperText: 'At least $kPasswordMinLength characters',
+                  errorText: _pwError,
                 ),
               ),
               if (_role == 'Collector') ...[
@@ -252,17 +278,7 @@ class _UserDialogState extends State<_UserDialog> {
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Cancel')),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop({
-              if (widget.existing == null) 'username': _username.text.trim(),
-              'name': _name.text.trim(),
-              'role': _role,
-              'empCode': _emp.text.trim(),
-              'phone': _phone.text.trim(),
-              'device': _device.text.trim(),
-              'active': _active,
-              if (_password.text.isNotEmpty) 'password': _password.text,
-              'customers': _role == 'Collector' ? _scope.toList() : <String>[],
-            }),
+            onPressed: _submit,
             child: Text(widget.existing == null ? 'Create' : 'Save'),
           ),
         ],

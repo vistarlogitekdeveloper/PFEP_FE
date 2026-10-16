@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -132,7 +134,7 @@ class _PfepAppState extends ConsumerState<PfepApp> {
       // forces every screen to rebuild against the palette now in effect.
       builder: (context, child) => KeyedSubtree(
         key: ValueKey(light),
-        child: child ?? const SizedBox.shrink(),
+        child: _IdleTimeout(child: child ?? const SizedBox.shrink()),
       ),
     );
   }
@@ -161,4 +163,53 @@ GoRouter _withScreenViews(GoRouter router) {
 /// Bridges the Riverpod session into GoRouter's refresh mechanism.
 class _Bumper extends ChangeNotifier {
   void bump() => notifyListeners();
+}
+
+/// Signs a session out after a stretch with no pointer activity. The token
+/// itself lasts a full 12h shift, so reopening the app at a vendor site keeps
+/// the field team signed in; this is the separate guard for a screen left open
+/// and unattended, typically on a shared desktop (#22D).
+class _IdleTimeout extends ConsumerStatefulWidget {
+  const _IdleTimeout({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_IdleTimeout> createState() => _IdleTimeoutState();
+}
+
+class _IdleTimeoutState extends ConsumerState<_IdleTimeout> {
+  static const _idle = Duration(minutes: 30);
+  DateTime _last = DateTime.now();
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    // A cheap minute-granularity check rather than re-arming a timer on every
+    // pointer event; the handler below only stamps a timestamp.
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (ref.read(sessionProvider).signedIn && DateTime.now().difference(_last) >= _idle) {
+        ref.read(sessionProvider.notifier).signOut();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  void _touch([_]) => _last = DateTime.now();
+
+  @override
+  Widget build(BuildContext context) => Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _touch,
+        onPointerMove: _touch,
+        onPointerHover: _touch,
+        onPointerSignal: _touch,
+        child: widget.child,
+      );
 }
