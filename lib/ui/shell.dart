@@ -8,6 +8,7 @@ import '../core/offline_queue.dart';
 import '../core/theme.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
+import 'change_password_dialog.dart';
 import 'widgets/common.dart';
 
 class NavItem {
@@ -768,10 +769,11 @@ class _AccountButton extends ConsumerWidget {
             ]),
           ),
           const PopupMenuDivider(),
+          const PopupMenuItem(value: 'changePassword', child: Text('Change password')),
           const PopupMenuItem(value: 'signout', child: Text('Sign out')),
         ],
         onSelected: (v) {
-          if (v == 'signout') _signOutWithGuard(context, ref);
+
         },
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Avatar(user.initials, size: 34),
