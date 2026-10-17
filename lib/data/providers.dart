@@ -133,7 +133,6 @@ class SessionNotifier extends Notifier<SessionState> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
     final customerId = prefs.getString(_customerKey);
-    await OfflineQueue.instance.load();
 
     if (token == null) {
       state = state.copyWith(loading: false);
@@ -142,6 +141,9 @@ class SessionNotifier extends Notifier<SessionState> {
     _api.setToken(token);
     try {
       final me = await _repo.me();
+      // Load this user's own offline queue (keyed per user, so a shared device
+      // never flushes another user's work).
+      await OfflineQueue.instance.useUser(me.user.id);
       // Usage analytics, before the state change so the screen it leads to is
       // already theirs. Fire and forget.
       _identify(me.user);
@@ -171,6 +173,7 @@ class SessionNotifier extends Notifier<SessionState> {
       await prefs.setString(_tokenKey, res.token);
 
       final me = await _repo.me();
+      await OfflineQueue.instance.useUser(me.user.id);
       final saved = prefs.getString(_customerKey);
       final active = me.customers.any((c) => c.id == saved)
           ? saved
@@ -196,6 +199,9 @@ class SessionNotifier extends Notifier<SessionState> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     _api.setToken(null);
+    // Switch the offline queue off this user: their unsynced ops stay persisted
+    // under their own key and come back when they sign in again on this device.
+    await OfflineQueue.instance.useUser(null);
     state = const SessionState(loading: false);
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/offline_queue.dart';
 import '../core/theme.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
@@ -236,7 +237,7 @@ class _Sidebar extends ConsumerWidget {
                 color: Brand.txt3,
                 hoverColor: Brand.bad.withValues(alpha: 0.1),
                 icon: Icon(Icons.logout),
-                onPressed: () => ref.read(sessionProvider.notifier).signOut(),
+                onPressed: () => _signOutWithGuard(context, ref),
               ),
             ]),
           ),
@@ -720,6 +721,31 @@ class _IconBtn extends StatelessWidget {
   }
 }
 
+/// Sign out, but first warn if the offline queue still holds unsynced work. The
+/// work is kept per-user on this device and resyncs on the next sign-in, so this
+/// is a heads-up rather than a block (#14).
+Future<void> _signOutWithGuard(BuildContext context, WidgetRef ref) async {
+  final n = OfflineQueue.instance.length;
+  if (n > 0) {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Sign out with items still to sync?'),
+        content: Text(
+          '$n item${n == 1 ? '' : 's'} on this device ${n == 1 ? 'has' : 'have'} not been uploaded yet. '
+          'They stay on this device and sync when you sign in again here.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Stay signed in')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+  }
+  await ref.read(sessionProvider.notifier).signOut();
+}
+
 class _AccountButton extends ConsumerWidget {
   const _AccountButton({required this.user, required this.wide});
 
@@ -745,7 +771,7 @@ class _AccountButton extends ConsumerWidget {
           const PopupMenuItem(value: 'signout', child: Text('Sign out')),
         ],
         onSelected: (v) {
-          if (v == 'signout') ref.read(sessionProvider.notifier).signOut();
+          if (v == 'signout') _signOutWithGuard(context, ref);
         },
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Avatar(user.initials, size: 34),
