@@ -113,8 +113,62 @@ class _CollectScreenState extends ConsumerState<CollectScreen> {
       if (!mounted) return false;
       setState(() => _saving = false);
       if (e.isConflict) {
-        showToast(context, 'Changed on another device',
-            detail: 'Reloading the latest version of this record.', error: true);
+        // A background autosave must not throw a modal mid-typing: keep the edit
+        // and let the next explicit save surface the choice (#14/#7).
+        if (silent) {
+          _dirty.addAll(payload);
+          return false;
+        }
+        final current = e.details is Map ? (e.details['currentVersion'] as num?)?.toInt() : null;
+        final keepMine = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Changed on another device'),
+            content: const Text(
+              'Someone updated this record on another device while you were editing it. '
+              'Keep your changes (they overwrite the other edit only on the fields you changed), '
+              'or discard yours and load the latest version?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Load latest (discard mine)'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Keep my changes'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return false;
+        if (keepMine == true && current != null) {
+          // Re-save the same edits against the version now on the server; the
+          // backend merges per field, so the collector's fields win while the
+          // other device's untouched fields are kept.
+          try {
+            final updated = await ref.read(repositoryProvider).saveData(
+                  _record!.id, payload, version: current,
+                  label: '${_record!.partNo} - ${payload.length} field(s)',
+                );
+            if (!mounted) return false;
+            setState(() {
+              if (updated != null) _record = updated;
+            });
+            return true;
+          } on ApiException catch (e2) {
+            _dirty.addAll(payload);
+            if (mounted) showToast(context, 'Could not save', detail: e2.message, error: true);
+            return false;
+          }
+        }
+        if (keepMine == true) {
+          // Wanted to keep but the server version was unreadable; preserve the
+          // edits so nothing is lost and let them retry.
+          _dirty.addAll(payload);
+          showToast(context, 'Please save again', detail: 'Your changes are kept on this device.', error: true);
+          return false;
+        }
         await _load();
       } else {
         _dirty.addAll(payload); // keep the edit so it is not silently dropped

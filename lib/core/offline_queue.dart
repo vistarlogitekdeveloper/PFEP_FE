@@ -83,23 +83,60 @@ class QueuedOp {
 class OfflineQueue extends ChangeNotifier {
   OfflineQueue._();
 
-  static const _key = 'pfep.offline.queue.v1';
+  // Keyed per user. The queue used to live under one device-global key, which
+  // let a user who signed in on a shared device flush the PREVIOUS user's queued
+  // ops under their own token. Each user's queue is now its own key, so a user's
+  // unsynced work is kept across sign-out and restored only for them.
+  static const _legacyKey = 'pfep.offline.queue.v1';
+  static String _keyFor(String? userId) =>
+      userId == null ? 'pfep.offline.queue.v1.anon' : 'pfep.offline.queue.v1.$userId';
   static final OfflineQueue instance = OfflineQueue._();
 
   final List<QueuedOp> _ops = [];
   bool _loaded = false;
+  String? _userId;
 
   List<QueuedOp> get ops => List.unmodifiable(_ops);
   int get length => _ops.length;
   bool get isEmpty => _ops.isEmpty;
   int get pendingBytes => _ops.fold(0, (s, o) => s + o.sizeBytes);
 
+  /// Point the queue at a user's own stored ops — call after sign-in / session
+  /// restore, and with null on sign-out. A no-op if already on that user.
+  Future<void> useUser(String? userId) async {
+    if (_loaded && _userId == userId) return;
+    _userId = userId;
+    _loaded = false;
+    _ops.clear();
+    await _load();
+  }
+
+  /// Ensure the current user's queue is loaded (used before a flush).
   Future<void> load() async {
     if (_loaded) return;
+    await _load();
+  }
+
+  Future<void> _load() async {
     _loaded = true;
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    if (raw == null) return;
+    // One-time migration off the old device-global key: adopt it for the first
+    // signed-in user to load after the upgrade — on a single device that is the
+    // person who created it — then drop the shared copy so no one else flushes it.
+    if (_userId != null) {
+      final legacy = prefs.getString(_legacyKey);
+      if (legacy != null) {
+        if (prefs.getString(_keyFor(_userId)) == null) {
+          await prefs.setString(_keyFor(_userId), legacy);
+        }
+        await prefs.remove(_legacyKey);
+      }
+    }
+    final raw = prefs.getString(_keyFor(_userId));
+    if (raw == null) {
+      notifyListeners();
+      return;
+    }
     try {
       final list = jsonDecode(raw) as List;
       _ops
@@ -108,7 +145,7 @@ class OfflineQueue extends ChangeNotifier {
       notifyListeners();
     } catch (_) {
       // A corrupt queue must not brick the app; drop it and carry on.
-      await prefs.remove(_key);
+      await prefs.remove(_keyFor(_userId));
     }
   }
 
@@ -140,7 +177,7 @@ class OfflineQueue extends ChangeNotifier {
 
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode(_ops.map((o) => o.toJson()).toList()));
+    await prefs.setString(_keyFor(_userId), jsonEncode(_ops.map((o) => o.toJson()).toList()));
     notifyListeners();
   }
 }
